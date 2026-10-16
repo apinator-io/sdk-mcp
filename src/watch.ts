@@ -233,7 +233,8 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
         const code = (data as { code?: unknown } | null)?.code;
         const message = (data as { message?: unknown } | null)?.message;
         if (typeof code === "number" && code >= 4000 && code < 4100) {
-          fail(`Connection refused (code ${code}): ${typeof message === "string" ? message : "no reason given"}. Check APINATOR_KEY and APINATOR_CLUSTER.`);
+          const reason = typeof message === "string" ? message.trim().replace(/\.+$/, "") : "no reason given";
+          fail(`Connection refused (code ${code}): ${reason}. Check APINATOR_KEY and APINATOR_CLUSTER.`);
           return;
         }
         if (phase === "watching") errors.push(data);

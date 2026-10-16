@@ -5,7 +5,8 @@
  *   ./scripts/local-stack.sh up && npm run build && npm run test:integration
  *
  * Skipped unless APINATOR_INTEGRATION=1. Reads credentials from
- * .local-stack/env (written by local-stack.sh) or the environment.
+ * .local-stack/env (written by local-stack.sh), or from the file named by
+ * APINATOR_ENV_FILE (e.g. a throwaway production app), then the environment.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -18,7 +19,7 @@ const ROOT = resolve(__dirname, "..");
 const enabled = process.env.APINATOR_INTEGRATION === "1";
 
 function stackEnv(): Record<string, string> {
-  const file = resolve(ROOT, ".local-stack/env");
+  const file = resolve(ROOT, process.env.APINATOR_ENV_FILE ?? ".local-stack/env");
   const env: Record<string, string> = {};
   if (existsSync(file)) {
     for (const line of readFileSync(file, "utf8").split("\n")) {
@@ -27,14 +28,15 @@ function stackEnv(): Record<string, string> {
     }
   }
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith("APINATOR_") && key !== "APINATOR_INTEGRATION") env[key] = process.env[key]!;
+    if (key.startsWith("APINATOR_") && key !== "APINATOR_INTEGRATION" && key !== "APINATOR_ENV_FILE") env[key] = process.env[key]!;
   }
   return env;
 }
 
-describe.runIf(enabled)("integration: local stack", () => {
+describe.runIf(enabled)("integration", () => {
   let client: Client;
   let secret: string;
+  let key: string;
 
   async function call(name: string, args: Record<string, unknown> = {}) {
     const result = (await client.callTool({ name, arguments: args }, undefined, { timeout: 90_000 })) as CallToolResult;
@@ -46,8 +48,9 @@ describe.runIf(enabled)("integration: local stack", () => {
   beforeAll(async () => {
     const env = stackEnv();
     secret = env.APINATOR_SECRET;
-    if (!secret || !env.APINATOR_WS_URL) {
-      throw new Error("No local stack credentials; run ./scripts/local-stack.sh up first.");
+    key = env.APINATOR_KEY;
+    if (!secret || !key) {
+      throw new Error("No credentials; run ./scripts/local-stack.sh up or set APINATOR_ENV_FILE.");
     }
     client = new Client({ name: "integration-test", version: "1.0.0" });
     await client.connect(
@@ -118,8 +121,9 @@ describe.runIf(enabled)("integration: local stack", () => {
     expect(result.json.presence.presence.ids).toContain("it-user");
   });
 
-  it("signs auth the server accepts", async () => {
-    const result = await call("sign_channel_auth", { socket_id: "node-mcp-1.1", channel: "private-x" });
-    expect(result.json.auth).toMatch(/^mcp-local-key:[0-9a-f]{64}$/);
+  it("signs channel auth with the app key", async () => {
+    const result = await call("sign_channel_auth", { socket_id: "node-1.1", channel: "private-x" });
+    expect(result.json.auth.startsWith(`${key}:`)).toBe(true);
+    expect(result.json.auth.slice(key.length + 1)).toMatch(/^[0-9a-f]{64}$/);
   });
 });

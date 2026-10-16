@@ -113,9 +113,9 @@ describe("watchChannel", () => {
   it("rejects on a fatal realtime:error", async () => {
     const ctx = await setup({
       onConnect: (ws) =>
-        ws.send(JSON.stringify({ event: "realtime:error", data: JSON.stringify({ code: 4001, message: "App not found" }) })),
+        ws.send(JSON.stringify({ event: "realtime:error", data: JSON.stringify({ code: 4001, message: "App not found." }) })),
     });
-    await expect(watch(ctx, { channel: "orders" })).rejects.toThrow(/Connection refused \(code 4001\): App not found/);
+    await expect(watch(ctx, { channel: "orders" })).rejects.toThrow("Connection refused (code 4001): App not found. Check");
   });
 
   it("rejects when the server never says connection_established", async () => {
