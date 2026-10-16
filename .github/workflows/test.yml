@@ -1,0 +1,44 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Smoke test package
+        run: |
+          npm pack --dry-run
+          node -e "import('./dist/index.js').then(m => { if (!m.createServer) throw new Error('ESM missing createServer') })"
+          # With no configuration the CLI must exit 1 with a readable message, not crash.
+          if node dist/cli.js 2> err.txt; then echo "expected exit 1"; exit 1; fi
+          grep -q "APINATOR_APP_ID is not set" err.txt

@@ -1,0 +1,73 @@
+{
+  "name": "@apinator/mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Apinator: publish events, inspect channels and watch live traffic from an AI agent",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "apinator-mcp": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsup",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:integration": "APINATOR_INTEGRATION=1 vitest run test/integration.test.ts",
+    "typecheck": "tsc --noEmit",
+    "inspect": "npx -y @modelcontextprotocol/inspector node dist/cli.js",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "apinator",
+    "mcp",
+    "model-context-protocol",
+    "realtime",
+    "websocket",
+    "pubsub",
+    "channels",
+    "presence",
+    "ai",
+    "agent"
+  ],
+  "author": "Apinator <dev@apinator.io> (https://apinator.io)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apinator-io/sdk-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/apinator-io/sdk-mcp/issues"
+  },
+  "homepage": "https://github.com/apinator-io/sdk-mcp#readme",
+  "dependencies": {
+    "@apinator/server": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}
