@@ -12,8 +12,9 @@ export const PROTOCOL_REFERENCE = `# Apinator protocol and channel reference
 - WebSocket: wss://ws-{cluster}.apinator.io/app/{key}?protocol=7
 - REST (signed with HMAC-SHA256): https://ws-{cluster}.apinator.io
   - POST /apps/{app_id}/events — publish. Body: {"name", "channel" | "channels" (max 100), "data" (string), "socket_id"?}
-  - GET  /apps/{app_id}/channels?filter_by_prefix=… — active channels with subscription_count
-  - GET  /apps/{app_id}/channels/{name} — one channel; 404 when nobody is subscribed
+  - GET  /apps/{app_id}/channels?filter_by_prefix=… — active channels: {"channels": [{"name", "type", "subscription_count"}]}
+    (type is "public", "private" or "presence"; an empty list is encoded as null)
+  - GET  /apps/{app_id}/channels/{name} — one channel: {"name", "type", "subscription_count"}; 404 when nobody is subscribed
 
 ## Frames
 Every WebSocket frame is JSON: {"event": "...", "channel": "...", "data": "<string>"}.
@@ -45,7 +46,7 @@ Event names starting with "realtime:" are reserved; your own events can use any 
 | presence- | signed + channel_data | Tracks members: {"user_id": "<string>", "user_info": {...}} |
 | cache- | none | Server replays the last event to each new subscriber |
 | private-cache- | signed | Private + last-event replay |
-| presence-cache- | signed | Known issues; avoid for now |
+| presence-cache- | signed + channel_data | Presence + last-event replay. Known issues; prefer cache- or private-cache- for now |
 
 ## Channel auth
 signature = hex(HMAC-SHA256(secret, "{socket_id}:{channel}" or "{socket_id}:{channel}:{channel_data}"))
@@ -95,7 +96,9 @@ export function registerResources(server: McpServer, deps: ResourceDeps = {}): v
               ],
             };
           }
-          // Serve the stale copy rather than nothing.
+          // Serve the stale copy rather than nothing, and don't retry (with a
+          // 5s timeout) on every read until the next hour is up.
+          cached = { ...cached, at: now() };
         }
       }
       return { contents: [{ uri: uri.href, mimeType: "text/markdown", text: cached!.text }] };

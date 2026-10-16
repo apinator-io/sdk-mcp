@@ -6,7 +6,7 @@ import { VERSION } from "./version";
 // stdout carries the MCP protocol, so everything human-readable goes to stderr.
 async function main(): Promise<void> {
   if (process.argv.includes("--version")) {
-    process.stderr.write(`${VERSION}\n`);
+    process.stdout.write(`${VERSION}\n`);
     return;
   }
 
@@ -32,6 +32,9 @@ async function main(): Promise<void> {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  // The MCP client went away (stdin closed). Don't linger until an in-flight watch ends.
+  process.stdin.on("end", shutdown);
+  process.stdin.on("close", shutdown);
 }
 
 main().catch((error: unknown) => {

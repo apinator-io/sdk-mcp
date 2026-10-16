@@ -12,6 +12,7 @@ export const MAX_KEPT_EVENTS = 200;
 export const MAX_EVENT_DATA_CHARS = 8_000;
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
+const DEFAULT_PROGRESS_INTERVAL_MS = 5_000;
 
 export interface WatchOptions {
   config: Config;
@@ -27,7 +28,19 @@ export interface WatchOptions {
   channelData?: string;
   /** Time allowed for connect + subscribe. */
   connectTimeoutMs?: number;
+  /** Called every `progressIntervalMs` while watching, so long watches can report liveness. */
+  onProgress?: (progress: WatchProgress) => void;
+  /** How often `onProgress` is called (default 5000). */
+  progressIntervalMs?: number;
   signal?: AbortSignal;
+}
+
+export interface WatchProgress {
+  /** Milliseconds since the subscription succeeded. */
+  elapsed_ms: number;
+  /** Total milliseconds the watch will run unless it stops early. */
+  total_ms: number;
+  events_received: number;
 }
 
 export interface WatchedEvent {
@@ -107,6 +120,7 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
       );
     }, opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS);
     let watchTimer: ReturnType<typeof setTimeout> | undefined;
+    let progressTimer: ReturnType<typeof setInterval> | undefined;
 
     const onAbort = () => finish("cancelled");
     opts.signal?.addEventListener("abort", onAbort, { once: true });
@@ -114,6 +128,7 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
     function cleanup() {
       clearTimeout(connectTimer);
       if (watchTimer) clearTimeout(watchTimer);
+      if (progressTimer) clearInterval(progressTimer);
       opts.signal?.removeEventListener("abort", onAbort);
       ws.removeAllListeners("message");
       if (ws.readyState === WebSocket.OPEN) {
@@ -191,11 +206,24 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
       subscribedAt = Date.now();
       if (isPresence) presence = data;
       watchTimer = setTimeout(() => finish("time_elapsed"), opts.seconds * 1000);
+      if (opts.onProgress) {
+        const onProgress = opts.onProgress;
+        progressTimer = setInterval(() => {
+          onProgress({ elapsed_ms: Date.now() - subscribedAt, total_ms: opts.seconds * 1000, events_received: received });
+        }, opts.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS);
+      }
     }
 
     function record(event: string, rawData: unknown) {
       received++;
-      if (events.length >= opts.maxEvents) return;
+      if (events.length < opts.maxEvents) events.push(describe(event, rawData));
+      // Checked after counting, not after keeping: until_events may exceed max_events.
+      if (opts.untilEvents !== undefined && received >= opts.untilEvents) {
+        finish("until_events_reached");
+      }
+    }
+
+    function describe(event: string, rawData: unknown): WatchedEvent {
       const entry: WatchedEvent = {
         event,
         channel,
@@ -209,16 +237,23 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
       } else {
         entry.data = parseMaybeJson(rawData);
       }
-      events.push(entry);
-      if (opts.untilEvents !== undefined && received >= opts.untilEvents) {
-        finish("until_events_reached");
-      }
+      return entry;
     }
 
+    // Anything thrown in here would otherwise escape the EventEmitter and
+    // crash the whole MCP server process.
     ws.on("message", (raw) => {
+      try {
+        handleMessage(raw.toString());
+      } catch (err) {
+        fail(`Error handling a frame from ${config.wsUrl}: ${(err as Error).message}`);
+      }
+    });
+
+    function handleMessage(raw: string) {
       let msg: Envelope;
       try {
-        msg = JSON.parse(raw.toString()) as Envelope;
+        msg = JSON.parse(raw) as Envelope;
       } catch {
         return;
       }
@@ -275,7 +310,7 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
         if (event === "realtime:subscription_succeeded") return;
         record(event, msg.data);
       }
-    });
+    }
 
     ws.on("error", (err) => {
       const code = (err as NodeJS.ErrnoException).code;
@@ -298,7 +333,8 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
 
     if (channel.startsWith("presence-cache-")) {
       notes.push("presence-cache- channels have known issues; prefer cache- or private-cache- for last-event replay.");
-    } else if (channel.startsWith("cache-") || channel.startsWith("private-cache-")) {
+    }
+    if (/^(private-|presence-)?cache-/.test(channel)) {
       notes.push(
         "Cache channel: the server replays the last event (if one was published in the cache TTL) right after subscribing, so the first event may be older than this watch."
       );

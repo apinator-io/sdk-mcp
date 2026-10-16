@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "MCP server for Apinator: publish events, inspect channels and watch live traffic from an AI agent",
   "type": "module",
-  "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
     "apinator-mcp": "dist/cli.js"
@@ -16,12 +15,12 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsup",
-    "lint": "tsc --noEmit",
+    "lint": "npm run typecheck",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:integration": "APINATOR_INTEGRATION=1 vitest run test/integration.test.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "inspect": "npx -y @modelcontextprotocol/inspector node dist/cli.js",
     "prepublishOnly": "npm run build"
   },

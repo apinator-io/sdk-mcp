@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { ApiError, type Apinator } from "@apinator/server";
 import { z } from "zod";
 import type { Config } from "./config";
 import { describeError, redact, ToolError } from "./errors";
-import { MAX_KEPT_EVENTS, MAX_WATCH_SECONDS, watchChannel } from "./watch";
+import { MAX_KEPT_EVENTS, MAX_WATCH_SECONDS, watchChannel, type WatchProgress } from "./watch";
 
 /** Largest fan-out the publish API accepts in one call. */
 export const MAX_PUBLISH_CHANNELS = 100;
@@ -23,6 +24,9 @@ const socketId = z
   .describe('Socket id of a connected client, from realtime:connection_established (e.g. "node-eu-1.42").');
 
 const jsonPayload = z.union([z.string(), z.record(z.string(), z.unknown())]);
+const eventPayload = z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown())]);
+
+type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
 interface Deps {
   config: Config;
@@ -40,8 +44,8 @@ export function registerTools(server: McpServer, deps: Deps): void {
     content: [{ type: "text", text: describeError(error, config.secret) }],
   });
   const run =
-    <A>(fn: (args: A, extra: { signal: AbortSignal }) => Promise<unknown>) =>
-    async (args: A, extra: { signal: AbortSignal }): Promise<CallToolResult> => {
+    <A>(fn: (args: A, extra: ToolExtra) => Promise<unknown>) =>
+    async (args: A, extra: ToolExtra): Promise<CallToolResult> => {
       try {
         return ok(await fn(args, extra));
       } catch (error) {
@@ -71,8 +75,8 @@ export function registerTools(server: McpServer, deps: Deps): void {
             .min(1)
             .max(200)
             .describe('Event name, e.g. "order-created". Names starting with "realtime:" are reserved.'),
-          data: jsonPayload.describe(
-            "Event payload. An object is sent as JSON; a string is sent as-is (clients JSON-decode it if they can)."
+          data: eventPayload.describe(
+            "Event payload. An object or array is sent as JSON; a string is sent as-is (clients JSON-decode it if they can)."
           ),
           socket_id: socketId.optional().describe("Exclude this connection from receiving the event (the sender's own socket)."),
         },
@@ -194,7 +198,7 @@ export function registerTools(server: McpServer, deps: Deps): void {
         "Subscribe to a channel over WebSocket and collect the events that arrive for a few seconds, then disconnect. " +
         "Use it to confirm events are flowing, see payload shapes, or test a publish end to end (start the watch, " +
         "then publish). Private and presence channels are signed automatically. On presence channels the watcher " +
-        "joins as a member, which other subscribers will see.",
+        "joins as a member, which other subscribers will see. Long watches report progress every few seconds.",
       inputSchema: {
         channel: channelName.describe("Channel to subscribe to."),
         seconds: z
@@ -237,9 +241,35 @@ export function registerTools(server: McpServer, deps: Deps): void {
         untilEvents: args.until_events,
         channelData: args.channel_data === undefined ? undefined : presenceData(args.channel_data),
         signal: extra.signal,
+        onProgress: progressReporter(extra),
       });
     })
   );
+}
+
+/**
+ * Returns a callback that sends MCP progress notifications when the client
+ * asked for them (a `progressToken`). Clients that reset their request timeout
+ * on progress can then wait out a 60-second watch.
+ */
+function progressReporter(extra: ToolExtra): ((progress: WatchProgress) => void) | undefined {
+  const progressToken = extra._meta?.progressToken;
+  if (progressToken === undefined) return undefined;
+  return (progress) => {
+    void extra
+      .sendNotification({
+        method: "notifications/progress",
+        params: {
+          progressToken,
+          progress: progress.elapsed_ms,
+          total: progress.total_ms,
+          message: `Watching… ${progress.events_received} event(s) so far.`,
+        },
+      })
+      .catch(() => {
+        // The watch result still comes back; a lost progress frame is not worth failing it.
+      });
+  };
 }
 
 /** Normalises presence channel_data to the JSON string the signature covers, checking it has a user_id. */

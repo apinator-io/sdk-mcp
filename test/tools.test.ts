@@ -73,6 +73,15 @@ describe("publish_event", () => {
     await mcp.close();
   });
 
+  it("sends array data as JSON", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, {}));
+    const mcp = await connect(makeConfig());
+    const result = await mcp.call("publish_event", { channel: "a", name: "batch", data: [1, { b: 2 }] });
+    expect(result.isError).toBe(false);
+    expect(lastRequest().body).toEqual({ name: "batch", channel: "a", data: '[1,{"b":2}]' });
+    await mcp.close();
+  });
+
   it("sends string data unchanged, multiple channels and socket_id", async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, {}));
     const mcp = await connect(makeConfig());

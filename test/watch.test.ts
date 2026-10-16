@@ -1,6 +1,7 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApinator } from "../src/client";
-import { MAX_EVENT_DATA_CHARS, parseMaybeJson, watchChannel, type WatchOptions } from "../src/watch";
+import { MAX_EVENT_DATA_CHARS, parseMaybeJson, watchChannel, type WatchOptions, type WatchProgress } from "../src/watch";
 import { connect, makeConfig, SECRET, startFakeRealtime, waitFor } from "./helpers";
 
 type Fake = Awaited<ReturnType<typeof startFakeRealtime>>;
@@ -88,6 +89,49 @@ describe("watchChannel", () => {
     expect(result.events_kept).toBe(3);
     expect(result.events_received).toBe(10);
     expect(result.events_dropped).toBe(7);
+  });
+
+  it("stops at untilEvents even when it exceeds maxEvents", async () => {
+    const ctx = await setup();
+    const pending = watch(ctx, { channel: "feed", seconds: 5, maxEvents: 2, untilEvents: 5 });
+    await waitFor(() => fake!.subscriptions.length === 1);
+    await new Promise((r) => setTimeout(r, 20));
+    const started = Date.now();
+    for (let i = 0; i < 6; i++) fake!.broadcast({ event: "tick", channel: "feed", data: String(i) });
+    const result = await pending;
+    expect(result.stopped).toBe("until_events_reached");
+    expect(result.events_kept).toBe(2);
+    expect(result.events_received).toBe(5);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("reports progress while watching", async () => {
+    const ctx = await setup();
+    const seen: WatchProgress[] = [];
+    const pending = watch(ctx, {
+      channel: "orders",
+      seconds: 1,
+      progressIntervalMs: 100,
+      onProgress: (p) => seen.push(p),
+    });
+    await waitFor(() => fake!.subscriptions.length === 1);
+    await new Promise((r) => setTimeout(r, 20));
+    fake!.broadcast({ event: "e", channel: "orders", data: "1" });
+    await pending;
+    expect(seen.length).toBeGreaterThanOrEqual(5);
+    expect(seen.at(-1)).toMatchObject({ total_ms: 1000, events_received: 1 });
+    expect(seen.at(-1)!.elapsed_ms).toBeGreaterThan(0);
+  });
+
+  it("does not crash the process when a frame handler throws", async () => {
+    const ctx = await setup();
+    const throwing = createApinator(ctx.config);
+    (throwing as unknown as { authenticateChannel: () => never }).authenticateChannel = () => {
+      throw new Error("signer exploded");
+    };
+    await expect(watch({ config: ctx.config, client: throwing }, { channel: "private-x" })).rejects.toThrow(
+      /Error handling a frame.*signer exploded/
+    );
   });
 
   it("truncates oversized payloads", async () => {
@@ -180,6 +224,22 @@ describe("watch_channel tool", () => {
     expect(result.text).not.toContain(SECRET);
     await mcp.close();
   });
+
+  it("sends progress notifications when the client passes a progressToken", async () => {
+    const base = makeConfig();
+    fake = await startFakeRealtime(base);
+    const mcp = await connect(makeConfig({ wsUrl: fake.url }));
+    const progress: unknown[] = [];
+    const result = (await mcp.client.callTool(
+      { name: "watch_channel", arguments: { channel: "orders", seconds: 6, until_events: 1 } },
+      undefined,
+      { onprogress: (p) => progress.push(p), timeout: 20_000 }
+    )) as CallToolResult;
+    expect(result.isError).not.toBe(true);
+    expect(progress.length).toBeGreaterThanOrEqual(1);
+    expect(progress[0]).toMatchObject({ total: 6000 });
+    await mcp.close();
+  }, 20_000);
 
   it("validates seconds and channel_data", async () => {
     const mcp = await connect(makeConfig());

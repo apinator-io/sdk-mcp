@@ -16,6 +16,18 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const ROOT = resolve(__dirname, "..");
+
+/** The fields of tool results these tests look at. */
+interface Json {
+  published?: boolean;
+  active?: boolean;
+  stopped?: string;
+  events?: unknown[];
+  channels?: unknown[];
+  presence?: { presence?: { ids?: string[] } };
+  auth?: string;
+  [key: string]: unknown;
+}
 const enabled = process.env.APINATOR_INTEGRATION === "1";
 
 function stackEnv(): Record<string, string> {
@@ -42,7 +54,7 @@ describe.runIf(enabled)("integration", () => {
     const result = (await client.callTool({ name, arguments: args }, undefined, { timeout: 90_000 })) as CallToolResult;
     const text = result.content.map((c) => (c.type === "text" ? c.text : "")).join("");
     expect(text).not.toContain(secret);
-    return { isError: result.isError === true, text, json: (result.isError ? undefined : JSON.parse(text)) as Record<string, any> };
+    return { isError: result.isError === true, text, json: (result.isError ? undefined : JSON.parse(text)) as Json };
   }
 
   beforeAll(async () => {
@@ -80,7 +92,7 @@ describe.runIf(enabled)("integration", () => {
     expect(watched.isError).toBe(false);
     expect(watched.json.stopped).toBe("until_events_reached");
     expect(watched.json.events).toHaveLength(1);
-    expect(watched.json.events[0]).toMatchObject({ event: "order-status", channel, data: payload });
+    expect(watched.json.events?.[0]).toMatchObject({ event: "order-status", channel, data: payload });
   });
 
   it("sees a live publish on a private channel while watching, and lists the channel", async () => {
@@ -90,7 +102,7 @@ describe.runIf(enabled)("integration", () => {
     watching.catch(() => {});
 
     // Wait until the watcher's subscription is visible to the REST API.
-    let info: Record<string, any> = {};
+    let info: Json = {};
     for (let i = 0; i < 50 && !info.active; i++) {
       await new Promise((r) => setTimeout(r, 100));
       info = (await call("get_channel", { channel })).json;
@@ -102,7 +114,7 @@ describe.runIf(enabled)("integration", () => {
 
     expect((await call("publish_event", { channel, name: "ping", data: "hello" })).isError).toBe(false);
     const watched = (await watching).json;
-    expect(watched.events[0]).toMatchObject({ event: "ping", data: "hello" });
+    expect(watched.events?.[0]).toMatchObject({ event: "ping", data: "hello" });
   });
 
   it("reports an inactive channel without an error", async () => {
@@ -118,12 +130,12 @@ describe.runIf(enabled)("integration", () => {
       channel_data: { user_id: "it-user", user_info: { name: "IT" } },
     });
     expect(result.isError).toBe(false);
-    expect(result.json.presence.presence.ids).toContain("it-user");
+    expect(result.json.presence?.presence?.ids).toContain("it-user");
   });
 
   it("signs channel auth with the app key", async () => {
     const result = await call("sign_channel_auth", { socket_id: "node-1.1", channel: "private-x" });
-    expect(result.json.auth.startsWith(`${key}:`)).toBe(true);
-    expect(result.json.auth.slice(key.length + 1)).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.json.auth?.startsWith(`${key}:`)).toBe(true);
+    expect(result.json.auth?.slice(key.length + 1)).toMatch(/^[0-9a-f]{64}$/);
   });
 });

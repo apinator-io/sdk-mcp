@@ -52,6 +52,8 @@ claude mcp add apinator \
 | `APINATOR_SECRET` | yes | API secret. Used to sign requests; never returned by any tool |
 | `APINATOR_CLUSTER` | yes | Region the app was created in, e.g. `eu` or `us` |
 | `APINATOR_READ_ONLY` | no | `1` removes `publish_event`, so the agent can only observe |
+| `APINATOR_API_URL` | no | REST base URL of a local or self-hosted data plane (default `https://ws-{cluster}.apinator.io`) |
+| `APINATOR_WS_URL` | no | WebSocket base URL of a local or self-hosted data plane (default `wss://ws-{cluster}.apinator.io`) |
 
 The server checks these at startup and exits with a message naming anything missing or malformed.
 
@@ -59,11 +61,11 @@ The server checks these at startup and exits with a message naming anything miss
 
 | Tool | What it does |
 |---|---|
-| `publish_event` | Publish an event to a channel, or up to 100 channels. `data` can be an object (sent as JSON) or a string. Optional `socket_id` excludes the sender. `realtime:` event names are rejected. Not available in read-only mode. |
+| `publish_event` | Publish an event to a channel, or up to 100 channels. `data` can be an object or array (sent as JSON) or a string. Optional `socket_id` excludes the sender. `realtime:` event names are rejected. Not available in read-only mode. |
 | `list_channels` | Active channels (with at least one subscriber) and their subscriber counts, optionally filtered by `prefix`. |
 | `get_channel` | One channel's subscriber count, or `active: false` when nobody is subscribed. |
 | `sign_channel_auth` | The `auth` (and `channel_data`) your auth endpoint should return for a `private-` or `presence-` subscription. Handy for testing an auth flow or debugging a signature mismatch. |
-| `watch_channel` | Connects over WebSocket, subscribes (signing private/presence auth itself), and collects events for `seconds` (default 10, max 60). Keeps up to `max_events` (default 50, max 200); `until_events` returns early. On presence channels the watcher joins as a member, which other subscribers will see. |
+| `watch_channel` | Connects over WebSocket, subscribes (signing private/presence auth itself), and collects events for `seconds` (default 10, max 60). Keeps up to `max_events` (default 50, max 200); `until_events` returns early. Sends MCP progress notifications every 5 seconds, so clients that reset their timeout on progress can wait out a long watch. On presence channels the watcher joins as a member, which other subscribers will see. |
 
 Every tool except `publish_event` is annotated `readOnlyHint`, so clients can auto-approve them.
 
@@ -94,8 +96,12 @@ still receives it.
 npm install
 npm run build
 npm test                  # unit tests (mocked fetch, local fake WebSocket server)
-npm run typecheck
+npm run typecheck         # src and tests
 ```
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please) from Conventional
+Commits on `main`; the release PR bumps `package.json`, updates `CHANGELOG.md` and tags, and the
+workflow then publishes to npm.
 
 Maintainers with the Apinator backend checked out next to this repo (`../../backend`, or set
 `BACKEND_DIR`) can run the integration test and the MCP inspector against a throwaway local stack:
