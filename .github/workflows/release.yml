@@ -24,12 +24,19 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
+    # Trusted publishing: npm exchanges this job's GitHub OIDC token for a
+    # short-lived publish credential, so no npm token secret is stored.
+    # Configured per package on npmjs.com (Settings -> Trusted Publisher).
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Trusted publishing needs npm >= 11.5.1, which ships with Node 24.
+          node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
 
@@ -49,5 +56,3 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
