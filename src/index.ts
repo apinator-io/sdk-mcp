@@ -9,5 +9,5 @@
 
 export { createServer, type ServerOptions } from "./server";
 export { loadConfig, ConfigError, type Config } from "./config";
-export { watchChannel, type WatchOptions, type WatchResult, type WatchedEvent } from "./watch";
+export { watchChannel, type WatchOptions, type WatchProgress, type WatchResult, type WatchedEvent } from "./watch";
 export { VERSION } from "./version";

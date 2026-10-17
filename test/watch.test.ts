@@ -46,6 +46,14 @@ describe("watchChannel", () => {
     expect(result.watched_ms).toBeGreaterThanOrEqual(900);
   });
 
+  it("gives presence-cache channels one combined note", async () => {
+    const ctx = await setup();
+    const result = await watch(ctx, { channel: "presence-cache-room", seconds: 1 });
+    const cacheNotes = result.notes.filter((n) => /cache/i.test(n));
+    expect(cacheNotes).toHaveLength(1);
+    expect(cacheNotes[0]).toMatch(/known issues/);
+  });
+
   it("receives the cached event on cache channels", async () => {
     const ctx = await setup({ cache: { "cache-status": { event: "status", data: '{"ok":true}' } } });
     const result = await watch(ctx, { channel: "cache-status", untilEvents: 1, seconds: 5 });
@@ -121,6 +129,20 @@ describe("watchChannel", () => {
     expect(seen.length).toBeGreaterThanOrEqual(5);
     expect(seen.at(-1)).toMatchObject({ total_ms: 1000, events_received: 1 });
     expect(seen.at(-1)!.elapsed_ms).toBeGreaterThan(0);
+  });
+
+  it("survives a throwing onProgress callback and notes it", async () => {
+    const ctx = await setup();
+    const result = await watch(ctx, {
+      channel: "orders",
+      seconds: 1,
+      progressIntervalMs: 100,
+      onProgress: () => {
+        throw new Error("reporter exploded");
+      },
+    });
+    expect(result.stopped).toBe("time_elapsed");
+    expect(result.notes.join(" ")).toMatch(/Progress callback failed: reporter exploded/);
   });
 
   it("does not crash the process when a frame handler throws", async () => {
@@ -231,13 +253,21 @@ describe("watch_channel tool", () => {
     const mcp = await connect(makeConfig({ wsUrl: fake.url }));
     const progress: unknown[] = [];
     const result = (await mcp.client.callTool(
-      { name: "watch_channel", arguments: { channel: "orders", seconds: 6, until_events: 1 } },
+      { name: "watch_channel", arguments: { channel: "orders", seconds: 30, until_events: 1 } },
       undefined,
-      { onprogress: (p) => progress.push(p), timeout: 20_000 }
+      {
+        onprogress: (p) => {
+          progress.push(p);
+          // The first progress frame (after 5s) proves the path; end the watch right away.
+          fake!.broadcast({ event: "e", channel: "orders", data: "1" });
+        },
+        timeout: 20_000,
+      }
     )) as CallToolResult;
     expect(result.isError).not.toBe(true);
     expect(progress.length).toBeGreaterThanOrEqual(1);
-    expect(progress[0]).toMatchObject({ total: 6000 });
+    expect(progress[0]).toMatchObject({ total: 30_000 });
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ stopped: "until_events_reached" });
     await mcp.close();
   }, 20_000);
 

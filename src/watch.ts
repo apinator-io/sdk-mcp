@@ -209,7 +209,13 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
       if (opts.onProgress) {
         const onProgress = opts.onProgress;
         progressTimer = setInterval(() => {
-          onProgress({ elapsed_ms: Date.now() - subscribedAt, total_ms: opts.seconds * 1000, events_received: received });
+          // A throwing callback must not escape the timer and crash the process.
+          try {
+            onProgress({ elapsed_ms: Date.now() - subscribedAt, total_ms: opts.seconds * 1000, events_received: received });
+          } catch (err) {
+            notes.push(`Progress callback failed: ${(err as Error).message}`);
+            clearInterval(progressTimer);
+          }
         }, opts.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS);
       }
     }
@@ -332,9 +338,11 @@ export function watchChannel(opts: WatchOptions): Promise<WatchResult> {
     });
 
     if (channel.startsWith("presence-cache-")) {
-      notes.push("presence-cache- channels have known issues; prefer cache- or private-cache- for last-event replay.");
-    }
-    if (/^(private-|presence-)?cache-/.test(channel)) {
+      notes.push(
+        "presence-cache- channel: the last event is replayed right after subscribing, so the first event may be older than this watch. " +
+          "These channels have known issues; prefer cache- or private-cache- for last-event replay."
+      );
+    } else if (/^(private-)?cache-/.test(channel)) {
       notes.push(
         "Cache channel: the server replays the last event (if one was published in the cache TTL) right after subscribing, so the first event may be older than this watch."
       );

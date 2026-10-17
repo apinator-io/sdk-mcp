@@ -27,7 +27,11 @@ async function main(): Promise<void> {
     `Apinator MCP server ${VERSION} running on stdio (app ${config.appId}, cluster ${config.cluster}${config.readOnly ? ", read-only" : ""}).\n`
   );
 
+  // SIGINT/SIGTERM and stdin end/close can all fire for one disconnect; close once.
+  let closing = false;
   const shutdown = () => {
+    if (closing) return;
+    closing = true;
     void server.close().finally(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);
