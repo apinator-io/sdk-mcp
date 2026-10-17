@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/apinator-io/sdk-mcp/compare/v1.0.0...v1.0.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* guard the progress callback and export WatchProgress ([da80d35](https://github.com/apinator-io/sdk-mcp/commit/da80d354464990d52f711555b3f56dc78698bd6d))
+
 ## 1.0.0 (2026-10-16)
 
 
