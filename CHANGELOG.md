@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/apinator-io/sdk-mcp/compare/v1.0.1...v1.0.2) (2026-10-17)
+
+
+### Miscellaneous Chores
+
+* release 1.0.2 ([f19c525](https://github.com/apinator-io/sdk-mcp/commit/f19c52516b76e66df9713e6a4901c78e3ab16116))
+
 ## [1.0.1](https://github.com/apinator-io/sdk-mcp/compare/v1.0.0...v1.0.1) (2026-10-17)
 
 
