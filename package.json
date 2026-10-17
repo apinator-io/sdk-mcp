@@ -1,6 +1,6 @@
 {
   "name": "@apinator/mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Apinator: publish events, inspect channels and watch live traffic from an AI agent",
   "type": "module",
   "types": "dist/index.d.ts",
