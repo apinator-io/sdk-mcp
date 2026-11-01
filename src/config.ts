@@ -16,6 +16,8 @@ export interface Config {
   apiUrl: string;
   /** WebSocket base URL. Defaults to wss://ws-{cluster}.apinator.io. */
   wsUrl: string;
+  /** Control plane base URL, for webhook management. Defaults to https://api.apinator.io. */
+  controlUrl: string;
 }
 
 /** Thrown when the environment is missing or has invalid settings. */
@@ -34,6 +36,9 @@ export class ConfigError extends Error {
   }
 }
 
+/** The control plane every app is managed through. */
+export const DEFAULT_CONTROL_URL = "https://api.apinator.io";
+
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const FALSE_VALUES = new Set(["", "0", "false", "no", "off"]);
 
@@ -41,7 +46,8 @@ const FALSE_VALUES = new Set(["", "0", "false", "no", "off"]);
  * Reads and validates configuration from `env`.
  *
  * APINATOR_API_URL and APINATOR_WS_URL are optional overrides for pointing the
- * server at a local or self-hosted data plane; normal users never set them.
+ * server at a local or self-hosted data plane, and APINATOR_CONTROL_URL at a
+ * local control plane; normal users never set them.
  *
  * @throws {ConfigError} listing every problem found, so they can all be fixed at once.
  */
@@ -78,6 +84,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   const apiUrl = parseBaseUrl("APINATOR_API_URL", read("APINATOR_API_URL"), ["http:", "https:"], problems);
   const wsUrl = parseBaseUrl("APINATOR_WS_URL", read("APINATOR_WS_URL"), ["ws:", "wss:"], problems);
+  const controlUrl = parseBaseUrl("APINATOR_CONTROL_URL", read("APINATOR_CONTROL_URL"), ["http:", "https:"], problems);
 
   if (problems.length > 0) throw new ConfigError(problems);
 
@@ -89,6 +96,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     readOnly,
     apiUrl: apiUrl ?? `https://ws-${cluster}.apinator.io`,
     wsUrl: wsUrl ?? `wss://ws-${cluster}.apinator.io`,
+    controlUrl: controlUrl ?? DEFAULT_CONTROL_URL,
   };
 }
 

@@ -4,6 +4,8 @@ import { createApinator } from "./client";
 import type { Config } from "./config";
 import { registerPrompts, registerResources } from "./resources";
 import { registerTools } from "./tools";
+import { registerWebhookTools } from "./webhook-tools";
+import type { WebhookApi } from "./webhooks";
 import { VERSION } from "./version";
 
 export interface ServerOptions {
@@ -11,6 +13,8 @@ export interface ServerOptions {
   client?: Apinator;
   /** Overrides fetch for the docs resource (tests). */
   fetchImpl?: typeof fetch;
+  /** Overrides the control plane webhook client (tests). */
+  webhooks?: WebhookApi;
 }
 
 /** Builds the Apinator MCP server for `config`. Connect it to a transport to serve it. */
@@ -24,11 +28,17 @@ export function createServer(config: Config, options: ServerOptions = {}): McpSe
         "Channels only show up in list_channels/get_channel while a client is subscribed. " +
         "To test delivery end to end, start watch_channel and publish while it is listening; " +
         "on cache- channels a watch started after a publish also receives the last event. " +
+        "Webhooks (channel_occupied, channel_vacated, member_added, member_removed) are managed with " +
+        "list_webhooks, add_webhook, edit_webhook, delete_webhook and test_webhook; add_webhook returns the " +
+        "endpoint's signing secret once, so store it in the app's environment right away. " +
         "Read apinator://reference/protocol for channel types and frames." +
-        (config.readOnly ? " This server is in read-only mode: publish_event is disabled." : ""),
+        (config.readOnly
+          ? " This server is in read-only mode: publish_event and the webhook write tools are disabled."
+          : ""),
     }
   );
   registerTools(server, { config, client });
+  registerWebhookTools(server, { config, webhooks: options.webhooks });
   registerResources(server, { fetchImpl: options.fetchImpl });
   registerPrompts(server);
   return server;

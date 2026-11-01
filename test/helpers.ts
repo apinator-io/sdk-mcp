@@ -18,6 +18,7 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     readOnly: false,
     apiUrl: "https://ws-eu.apinator.io",
     wsUrl: "wss://ws-eu.apinator.io",
+    controlUrl: "https://api.apinator.io",
     ...overrides,
   };
 }

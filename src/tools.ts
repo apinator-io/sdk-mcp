@@ -26,16 +26,20 @@ const socketId = z
 const jsonPayload = z.union([z.string(), z.record(z.string(), z.unknown())]);
 const eventPayload = z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown())]);
 
-type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+export type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
 interface Deps {
   config: Config;
   client: Apinator;
 }
 
-/** Registers every Apinator tool on `server`. `publish_event` is skipped in read-only mode. */
-export function registerTools(server: McpServer, deps: Deps): void {
-  const { config, client } = deps;
+/** Wraps a tool body: its value becomes JSON text, anything thrown a short error; both are scrubbed of the secret. */
+export type ToolRunner = <A>(
+  fn: (args: A, extra: ToolExtra) => Promise<unknown>
+) => (args: A, extra: ToolExtra) => Promise<CallToolResult>;
+
+/** Builds the {@link ToolRunner} for `config`. */
+export function toolRunner(config: Config): ToolRunner {
   const ok = (value: unknown): CallToolResult => ({
     content: [{ type: "text", text: redact(JSON.stringify(value, null, 2), config.secret) }],
   });
@@ -43,15 +47,19 @@ export function registerTools(server: McpServer, deps: Deps): void {
     isError: true,
     content: [{ type: "text", text: describeError(error, config.secret) }],
   });
-  const run =
-    <A>(fn: (args: A, extra: ToolExtra) => Promise<unknown>) =>
-    async (args: A, extra: ToolExtra): Promise<CallToolResult> => {
-      try {
-        return ok(await fn(args, extra));
-      } catch (error) {
-        return fail(error);
-      }
-    };
+  return (fn) => async (args, extra) => {
+    try {
+      return ok(await fn(args, extra));
+    } catch (error) {
+      return fail(error);
+    }
+  };
+}
+
+/** Registers every Apinator tool on `server`. `publish_event` is skipped in read-only mode. */
+export function registerTools(server: McpServer, deps: Deps): void {
+  const { config, client } = deps;
+  const run = toolRunner(config);
 
   if (!config.readOnly) {
     server.registerTool(

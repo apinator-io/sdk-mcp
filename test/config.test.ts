@@ -18,6 +18,7 @@ describe("loadConfig", () => {
       readOnly: false,
       apiUrl: "https://ws-eu.apinator.io",
       wsUrl: "wss://ws-eu.apinator.io",
+      controlUrl: "https://api.apinator.io",
     });
   });
 
@@ -75,13 +76,16 @@ describe("loadConfig", () => {
       ...base,
       APINATOR_API_URL: "http://localhost:8081/",
       APINATOR_WS_URL: "ws://localhost:8081",
+      APINATOR_CONTROL_URL: "http://localhost:8080//",
     });
     expect(config.apiUrl).toBe("http://localhost:8081");
     expect(config.wsUrl).toBe("ws://localhost:8081");
+    expect(config.controlUrl).toBe("http://localhost:8080");
   });
 
   it("rejects overrides with the wrong scheme", () => {
     expect(() => loadConfig({ ...base, APINATOR_WS_URL: "http://localhost:8081" })).toThrow(/ws:\/\/ or wss:\/\//);
     expect(() => loadConfig({ ...base, APINATOR_API_URL: "not a url" })).toThrow(/not a valid URL/);
+    expect(() => loadConfig({ ...base, APINATOR_CONTROL_URL: "ws://localhost:8080" })).toThrow(/APINATOR_CONTROL_URL/);
   });
 });
