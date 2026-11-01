@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/apinator-io/sdk-mcp/compare/v1.0.2...v1.1.0) (2026-11-01)
+
+
+### Features
+
+* add webhook management tools ([dc44ccb](https://github.com/apinator-io/sdk-mcp/commit/dc44ccb8ef07c235d571f8377e3c3c2740e517e1))
+
 ## [1.0.2](https://github.com/apinator-io/sdk-mcp/compare/v1.0.1...v1.0.2) (2026-10-17)
 
 
