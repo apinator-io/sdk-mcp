@@ -9,7 +9,10 @@
  * APINATOR_ENV_FILE (e.g. a throwaway production app), then the environment.
  */
 import { existsSync, readFileSync } from "node:fs";
+import { createServer as createHttpServer, type IncomingHttpHeaders } from "node:http";
+import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
+import { verifyWebhook } from "@apinator/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -26,6 +29,11 @@ interface Json {
   channels?: unknown[];
   presence?: { presence?: { ids?: string[] } };
   auth?: string;
+  secret?: string;
+  webhook?: { id: string; url: string; events: string[]; enabled: boolean };
+  webhooks?: { id: string; url: string; events: string[]; enabled: boolean }[];
+  success?: boolean;
+  status_code?: number;
   [key: string]: unknown;
 }
 const enabled = process.env.APINATOR_INTEGRATION === "1";
@@ -49,6 +57,7 @@ describe.runIf(enabled)("integration", () => {
   let client: Client;
   let secret: string;
   let key: string;
+  let controlUrl: string | undefined;
 
   async function call(name: string, args: Record<string, unknown> = {}) {
     const result = (await client.callTool({ name, arguments: args }, undefined, { timeout: 90_000 })) as CallToolResult;
@@ -61,6 +70,7 @@ describe.runIf(enabled)("integration", () => {
     const env = stackEnv();
     secret = env.APINATOR_SECRET;
     key = env.APINATOR_KEY;
+    controlUrl = env.APINATOR_CONTROL_URL;
     if (!secret || !key) {
       throw new Error("No credentials; run ./scripts/local-stack.sh up or set APINATOR_ENV_FILE.");
     }
@@ -131,6 +141,61 @@ describe.runIf(enabled)("integration", () => {
     });
     expect(result.isError).toBe(false);
     expect(result.json.presence?.presence?.ids).toContain("it-user");
+  });
+
+  // Needs a control plane that allows private targets (local-stack.sh starts one), so the
+  // webhook can point at a receiver in this process.
+  it("adds, edits, tests, lists and deletes a webhook on the control plane", async (ctx) => {
+    if (!controlUrl || !/^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(controlUrl)) ctx.skip();
+
+    const received: { headers: IncomingHttpHeaders; body: string }[] = [];
+    const receiver = createHttpServer((req, res) => {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", () => {
+        received.push({ headers: req.headers, body });
+        res.writeHead(204).end();
+      });
+    });
+    await new Promise<void>((r) => receiver.listen(0, "127.0.0.1", () => r()));
+    const url = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/apinator-webhook`;
+
+    try {
+      const added = await call("add_webhook", { url, events: ["channel_occupied"] });
+      expect(added.isError, added.text).toBe(false);
+      const webhookSecret = added.json.secret!;
+      expect(webhookSecret).toMatch(/^whsec_[0-9a-f]{64}$/);
+      const id = added.json.webhook!.id;
+
+      const duplicate = await call("add_webhook", { url, events: ["member_added"] });
+      expect(duplicate.isError).toBe(true);
+
+      const edited = await call("edit_webhook", { webhook_id: id, events: ["channel_occupied", "member_added"] });
+      expect(edited.isError, edited.text).toBe(false);
+      expect(edited.json.webhook?.events).toEqual(["channel_occupied", "member_added"]);
+
+      const listed = await call("list_webhooks");
+      expect(listed.json.webhooks).toContainEqual(
+        expect.objectContaining({ id, url, events: ["channel_occupied", "member_added"], enabled: true })
+      );
+      expect(listed.text).not.toContain(webhookSecret);
+
+      // The test delivery is signed with the secret add_webhook returned.
+      const tested = await call("test_webhook", { webhook_id: id });
+      expect(tested.json).toMatchObject({ success: true, status_code: 204 });
+      expect(received).toHaveLength(1);
+      const headers = Object.fromEntries(Object.entries(received[0].headers).map(([k, v]) => [k, v]));
+      expect(verifyWebhook(webhookSecret, headers, received[0].body)).toBe(true);
+      expect(JSON.parse(received[0].body)).toMatchObject({ event: "webhook.test" });
+
+      const deliveries = await call("list_webhook_deliveries", { webhook_id: id });
+      expect(deliveries.isError, deliveries.text).toBe(false);
+
+      expect((await call("delete_webhook", { webhook_id: id })).json).toEqual({ deleted: true, webhook_id: id });
+      expect((await call("list_webhooks")).json.webhooks?.map((w) => w.id)).not.toContain(id);
+    } finally {
+      await new Promise<void>((r) => receiver.close(() => r()));
+    }
   });
 
   it("signs channel auth with the app key", async () => {

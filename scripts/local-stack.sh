@@ -9,6 +9,8 @@
 # It uses its own containers on non-standard ports, so it never touches your
 # dev containers (`make dev-infra`) or anything else already listening on
 # 5432/6379/8080/8081. The credentials below are local test values only.
+# The control plane allows private webhook targets, so the integration test
+# can point a webhook at a receiver on localhost; never do that in production.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -83,6 +85,7 @@ SQL
   env DATABASE_URL="$db" REDIS_URL="redis://localhost:${REDIS_CENTRAL_PORT}/0" \
     INTERNAL_API_SECRET=mcp-local-internal JWT_SECRET=mcp-local-jwt PORT="$API_PORT" \
     CONSOLE_URL=http://localhost:3000 EMAIL_OUTPUT_DIR="$STATE_DIR/mail" \
+    WEBHOOK_ALLOW_PRIVATE_TARGETS=true \
     DATA_PLANE_API_URLS="eu=http://localhost:${REALTIME_PORT}" \
     "$STATE_DIR/bin/api" >"$STATE_DIR/api.log" 2>&1 &
   echo $! >"$STATE_DIR/api.pid"
@@ -102,6 +105,7 @@ APINATOR_SECRET=$APP_SECRET
 APINATOR_CLUSTER=eu
 APINATOR_API_URL=http://localhost:${REALTIME_PORT}
 APINATOR_WS_URL=ws://localhost:${REALTIME_PORT}
+APINATOR_CONTROL_URL=http://localhost:${API_PORT}
 ENV
   echo "== ready; environment written to $STATE_DIR/env" >&2
   cat "$STATE_DIR/env"

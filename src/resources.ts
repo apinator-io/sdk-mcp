@@ -150,6 +150,11 @@ Work in this order:
 5. Verify: use watch_channel on the channel, then publish_event (or trigger the real code path) and confirm
    the event arrives with the payload shape the client expects. Use list_channels / get_channel to confirm
    the client is subscribed.
+6. Only if the backend must react to channel activity (a channel gaining its first or losing its last subscriber,
+   presence members joining or leaving, e.g. to keep "online" status in the database): add a POST route that
+   verifies the raw body with verifyWebhook from the server SDK and returns 2xx, register it with add_webhook
+   (store the returned secret as APINATOR_WEBHOOK_SECRET right away; it is shown once), and check it with
+   test_webhook. The URL must be public; for a local dev server use a tunnel.
 Tell me which channels and events you chose and why before writing a lot of code.`,
           },
         },

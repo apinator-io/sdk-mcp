@@ -1,7 +1,7 @@
 {
   "name": "@apinator/mcp",
   "version": "1.0.2",
-  "description": "MCP server for Apinator: publish events, inspect channels and watch live traffic from an AI agent",
+  "description": "MCP server for Apinator: publish events, inspect channels, watch live traffic and manage webhooks from an AI agent",
   "type": "module",
   "types": "dist/index.d.ts",
   "bin": {
@@ -42,6 +42,7 @@
     "pubsub",
     "channels",
     "presence",
+    "webhooks",
     "ai",
     "agent"
   ],

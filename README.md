@@ -5,8 +5,9 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/apinator-io/sdk-mcp/test.yml?label=CI)](https://github.com/apinator-io/sdk-mcp/actions/workflows/test.yml)
 
 [Model Context Protocol](https://modelcontextprotocol.io) server for [Apinator](https://apinator.io).
-It lets an AI agent (Claude Code, Claude Desktop, Cursor, …) publish events, inspect channels and
-watch live traffic on your Apinator app, so it can build and debug realtime features end to end.
+It lets an AI agent (Claude Code, Claude Desktop, Cursor, …) publish events, inspect channels,
+watch live traffic and set up webhooks on your Apinator app, so it can build and debug realtime
+features end to end.
 
 ## Setup
 
@@ -51,9 +52,10 @@ claude mcp add apinator \
 | `APINATOR_KEY` | yes | API key |
 | `APINATOR_SECRET` | yes | API secret. Used to sign requests; never returned by any tool |
 | `APINATOR_CLUSTER` | yes | Region the app was created in, e.g. `eu` or `us` |
-| `APINATOR_READ_ONLY` | no | `1` removes `publish_event`, so the agent can only observe |
+| `APINATOR_READ_ONLY` | no | `1` removes `publish_event` and the webhook write tools, so the agent can only observe |
 | `APINATOR_API_URL` | no | REST base URL of a local or self-hosted data plane (default `https://ws-{cluster}.apinator.io`) |
 | `APINATOR_WS_URL` | no | WebSocket base URL of a local or self-hosted data plane (default `wss://ws-{cluster}.apinator.io`) |
+| `APINATOR_CONTROL_URL` | no | Base URL of a local or self-hosted control plane, used by the webhook tools (default `https://api.apinator.io`) |
 
 The server checks these at startup and exits with a message naming anything missing or malformed.
 
@@ -65,21 +67,38 @@ The server checks these at startup and exits with a message naming anything miss
 | `list_channels` | Active channels (with at least one subscriber) and their subscriber counts, optionally filtered by `prefix`. |
 | `get_channel` | One channel's subscriber count, or `active: false` when nobody is subscribed. |
 | `sign_channel_auth` | The `auth` (and `channel_data`) your auth endpoint should return for a `private-` or `presence-` subscription. Handy for testing an auth flow or debugging a signature mismatch. |
+| `list_webhooks` | The app's webhook endpoints (max 10): id, URL, events, enabled. Signing secrets are never listed. |
+| `add_webhook` | Register an endpoint `url` for `events` (`channel_occupied`, `channel_vacated`, `member_added`, `member_removed`). Returns its `whsec_` signing secret, **shown only this once**, for the app's environment. Refuses a URL that is already registered. Not available in read-only mode. |
+| `edit_webhook` | Change an endpoint's `url`, `events` or `enabled`. The secret stays the same. Not available in read-only mode. |
+| `delete_webhook` | Delete an endpoint. Not available in read-only mode. |
+| `test_webhook` | Send one signed `webhook.test` event now and report the receiver's status and timing. Not available in read-only mode. |
+| `list_webhook_deliveries` | Recent deliveries to one endpoint (status, attempts, last error), optionally filtered by `status`. |
 | `watch_channel` | Connects over WebSocket, subscribes (signing private/presence auth itself), and collects events for `seconds` (default 10, max 60). Keeps up to `max_events` (default 50, max 200); `until_events` returns early. Sends MCP progress notifications every 5 seconds, so clients that reset their timeout on progress can wait out a long watch. On presence channels the watcher joins as a member, which other subscribers will see. |
 
-Every tool except `publish_event` is annotated `readOnlyHint`, so clients can auto-approve them.
+`list_channels`, `get_channel`, `sign_channel_auth`, `watch_channel`, `list_webhooks` and
+`list_webhook_deliveries` are annotated `readOnlyHint`, so clients can auto-approve them;
+`delete_webhook` is annotated `destructiveHint`.
 
 A typical end-to-end check an agent runs: start `watch_channel` on a channel, trigger the code path
 that publishes (or call `publish_event`), and compare the payload with what the client expects.
 On `cache-` channels the last event is replayed to new subscribers, so a watch started after a publish
 still receives it.
 
+### Webhooks
+
+The webhook tools call the control plane (`https://api.apinator.io`), signed with the same app key and
+secret, and only ever touch this app's endpoints. A typical setup: add a POST route that verifies the
+raw body with `verifyWebhook` from the server SDK and returns 2xx, `add_webhook` with its public URL, store
+the returned secret as `APINATOR_WEBHOOK_SECRET`, then `test_webhook`. Webhook URLs must be reachable from
+the internet; private and loopback addresses are refused, so expose a local dev server with a tunnel
+(cloudflared, ngrok). Secret rotation and delivery retries stay in the console.
+
 ## Resources and prompts
 
 - `apinator://docs/llms.txt`: the Apinator docs index, fetched from https://apinator.io/llms.txt.
 - `apinator://reference/protocol`: frames, system events, error codes, channel types and the auth signature.
 - Prompt `add-realtime-feature`: walks the agent through choosing channels, wiring the server and client
-  SDKs, and verifying with `watch_channel`.
+  SDKs, verifying with `watch_channel`, and adding a webhook receiver when the backend needs one.
 
 ## Security
 
@@ -89,6 +108,10 @@ still receives it.
   should only look, or use a separate app for development.
 - `sign_channel_auth` produces valid subscription signatures for any channel name. Only give the server
   to agents you would trust with your app's auth endpoint.
+- The app secret can manage the app's webhooks. Anyone holding it can point an endpoint at their own URL
+  and receive channel names and presence `user_id`s from then on, so treat it like any server secret.
+  It cannot read an existing endpoint's signing secret (only `add_webhook` returns one, once), so it cannot
+  forge deliveries to a receiver you already set up. `APINATOR_READ_ONLY=1` removes every webhook write tool.
 
 ## Development
 
@@ -113,7 +136,9 @@ npm run build && npm run test:integration
 ```
 
 `local-stack.sh up` writes the local credentials to `.local-stack/env`. It also sets
-`APINATOR_API_URL` and `APINATOR_WS_URL`, which point the server at a non-production data plane.
+`APINATOR_API_URL`, `APINATOR_WS_URL` and `APINATOR_CONTROL_URL`, which point the server at a
+non-production stack. Its control plane allows private webhook targets, so the integration test can
+register a receiver on localhost.
 
 ## License
 

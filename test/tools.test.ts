@@ -28,12 +28,24 @@ function lastRequest() {
 }
 
 describe("tool registration", () => {
-  it("lists all five tools with the right annotations", async () => {
+  it("lists every tool with the right annotations", async () => {
     const mcp = await connect(makeConfig());
     const { tools } = await mcp.client.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
     expect(Object.keys(byName).sort()).toEqual(
-      ["get_channel", "list_channels", "publish_event", "sign_channel_auth", "watch_channel"].sort()
+      [
+        "add_webhook",
+        "delete_webhook",
+        "edit_webhook",
+        "get_channel",
+        "list_channels",
+        "list_webhook_deliveries",
+        "list_webhooks",
+        "publish_event",
+        "sign_channel_auth",
+        "test_webhook",
+        "watch_channel",
+      ].sort()
     );
     expect(byName.publish_event.annotations?.readOnlyHint).toBe(false);
     expect(byName.publish_event.annotations?.destructiveHint).toBe(false);

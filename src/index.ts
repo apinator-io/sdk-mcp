@@ -10,4 +10,5 @@
 export { createServer, type ServerOptions } from "./server";
 export { loadConfig, ConfigError, type Config } from "./config";
 export { watchChannel, type WatchOptions, type WatchProgress, type WatchResult, type WatchedEvent } from "./watch";
+export { WebhookApi, WEBHOOK_EVENTS, type Webhook, type WebhookPatch, type WebhookTestResult, type WebhookDelivery } from "./webhooks";
 export { VERSION } from "./version";
