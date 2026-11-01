@@ -228,6 +228,11 @@ describe("webhook tools", () => {
     expect(denied.text).toMatch(/APINATOR_KEY and APINATOR_SECRET/);
     expect(denied.text).not.toContain(SECRET);
 
+    cp.setOverride(() => jsonResponse(401, { detail: "invalid api key. Check your app's API keys in the console." }));
+    const hinted = await mcp.call("list_webhooks");
+    expect(hinted.text).toContain("in the console. Check APINATOR_APP_ID");
+    expect(hinted.text).not.toContain("..");
+
     cp.setOverride(() => {
       throw Object.assign(new TypeError("fetch failed"), { cause: new Error("connect ECONNREFUSED 127.0.0.1:8080") });
     });

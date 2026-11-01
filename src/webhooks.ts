@@ -1,6 +1,6 @@
 import { signRequest } from "@apinator/server";
 import type { Config } from "./config";
-import { ToolError } from "./errors";
+import { sentence, ToolError } from "./errors";
 
 /** Event types an endpoint can listen for. */
 export const WEBHOOK_EVENTS = ["channel_occupied", "channel_vacated", "member_added", "member_removed"] as const;
@@ -138,17 +138,17 @@ export class WebhookApi {
         );
       }
       return (
-        `Apinator rejected the credentials: ${message}. Check APINATOR_APP_ID, APINATOR_KEY and APINATOR_SECRET ` +
+        `Apinator rejected the credentials: ${sentence(message)} Check APINATOR_APP_ID, APINATOR_KEY and APINATOR_SECRET ` +
         "belong to the same app, and that the machine's clock is correct (requests are signed with a timestamp)."
       );
     }
     if (status === 404 && webhookId) {
       return `Webhook ${webhookId} was not found on this app. Call list_webhooks for the ids.`;
     }
-    if (status === 404) return `Not found (HTTP 404): ${message}. Check APINATOR_APP_ID.`;
+    if (status === 404) return `Not found (HTTP 404): ${sentence(message)} Check APINATOR_APP_ID.`;
     if (status === 400) return `Apinator rejected the request: ${message}`;
     if (status === 422) return `Apinator refused the request: ${message}`;
-    if (status === 429) return `Rate limited by Apinator (HTTP 429): ${message}. Wait a moment and retry.`;
+    if (status === 429) return `Rate limited by Apinator (HTTP 429): ${sentence(message)} Wait a moment and retry.`;
     return `Apinator API error (HTTP ${status}): ${message}`;
   }
 }

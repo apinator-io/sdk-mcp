@@ -32,7 +32,7 @@ function rawDescription(error: unknown): string {
 
   if (error instanceof AuthenticationError) {
     return (
-      `Apinator rejected the credentials: ${error.message}. ` +
+      `Apinator rejected the credentials: ${sentence(error.message)} ` +
       "Check APINATOR_APP_ID, APINATOR_KEY, APINATOR_SECRET and APINATOR_CLUSTER " +
       "all belong to the same app, and that the machine's clock is correct (requests are signed with a timestamp)."
     );
@@ -42,10 +42,10 @@ function rawDescription(error: unknown): string {
   }
   if (error instanceof ApiError) {
     if (error.status === 404) {
-      return `Not found (HTTP 404): ${error.message}. Check APINATOR_APP_ID and APINATOR_CLUSTER.`;
+      return `Not found (HTTP 404): ${sentence(error.message)} Check APINATOR_APP_ID and APINATOR_CLUSTER.`;
     }
     if (error.status === 429) {
-      return `Rate limited by Apinator (HTTP 429): ${error.message}. Wait a moment and retry.`;
+      return `Rate limited by Apinator (HTTP 429): ${sentence(error.message)} Wait a moment and retry.`;
     }
     return `Apinator API error (HTTP ${error.status}): ${error.message}`;
   }
@@ -60,6 +60,11 @@ function rawDescription(error: unknown): string {
     return `${error.message}${causeText}`;
   }
   return String(error);
+}
+
+/** Ends `text` with exactly one period, so a hint can follow it. */
+export function sentence(text: string): string {
+  return `${text.trim().replace(/[.\s]+$/, "")}.`;
 }
 
 function truncate(text: string): string {
