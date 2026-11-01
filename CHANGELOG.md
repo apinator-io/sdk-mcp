@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/apinator-io/sdk-mcp/compare/v1.1.0...v1.1.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* avoid a double period in credential errors ([#8](https://github.com/apinator-io/sdk-mcp/issues/8)) ([31cf821](https://github.com/apinator-io/sdk-mcp/commit/31cf8217cadb2d8cffdba70d1c31611c8dc91953))
+
 ## [1.1.0](https://github.com/apinator-io/sdk-mcp/compare/v1.0.2...v1.1.0) (2026-11-01)
 
 
