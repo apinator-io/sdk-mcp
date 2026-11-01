@@ -6,7 +6,6 @@
 ### Features
 
 * add webhook management tools ([dc44ccb](https://github.com/apinator-io/sdk-mcp/commit/dc44ccb8ef07c235d571f8377e3c3c2740e517e1))
-* add webhook management tools ([bc79488](https://github.com/apinator-io/sdk-mcp/commit/bc79488d3456342005653d2fea78f72ddf204047))
 
 ## [1.0.2](https://github.com/apinator-io/sdk-mcp/compare/v1.0.1...v1.0.2) (2026-10-17)
 
